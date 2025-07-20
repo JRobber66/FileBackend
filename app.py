@@ -5,18 +5,19 @@ import string
 import time
 import zipfile
 from werkzeug.utils import secure_filename
+from flask_cors import CORS
 
-# Configuration
 UPLOAD_FOLDER = 'uploads'
 EXPIRY_SECONDS = 86400  # 24 hours
 
 app = Flask(__name__)
+CORS(app)  # ✅ Enable CORS
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-file_records = {}  # code -> { 'paths': [files], 'timestamp': time, 'delete_after': True/False }
+file_records = {}
 
-# Helpers
 def generate_code(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
@@ -33,7 +34,6 @@ def delete_files(code):
                 os.remove(path)
         del file_records[code]
 
-# Upload Endpoint
 @app.route('/upload', methods=['POST'])
 def upload_files():
     cleanup_expired()
@@ -60,11 +60,8 @@ def upload_files():
         'delete_after': delete_after_download
     }
 
-    print(f"[UPLOAD] Code generated: {code}")  # Debugging
-
     return jsonify({'code': code})
 
-# Retrieval Endpoint
 @app.route('/retrieve/<code>', methods=['GET'])
 def retrieve_file(code):
     cleanup_expired()
@@ -76,7 +73,8 @@ def retrieve_file(code):
     delete_after = file_records[code]['delete_after']
 
     if len(paths) == 1:
-        response = send_file(paths[0], as_attachment=True)
+        original_filename = os.path.basename(paths[0]).replace(f"{code}_", "")
+        response = send_file(paths[0], as_attachment=True, download_name=original_filename)
     else:
         zip_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{code}_bundle.zip")
         with zipfile.ZipFile(zip_path, 'w') as zipf:
@@ -89,6 +87,5 @@ def retrieve_file(code):
 
     return response
 
-# Run
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
