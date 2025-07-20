@@ -6,6 +6,7 @@ import time
 import zipfile
 from werkzeug.utils import secure_filename
 
+# Configuration
 UPLOAD_FOLDER = 'uploads'
 EXPIRY_SECONDS = 86400  # 24 hours
 
@@ -13,8 +14,9 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-file_records = {}  # Stores: code -> { 'paths': [file1, file2], 'timestamp': upload_time, 'delete_after': True/False }
+file_records = {}  # code -> { 'paths': [files], 'timestamp': time, 'delete_after': True/False }
 
+# Helpers
 def generate_code(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
@@ -31,6 +33,7 @@ def delete_files(code):
                 os.remove(path)
         del file_records[code]
 
+# Upload Endpoint
 @app.route('/upload', methods=['POST'])
 def upload_files():
     cleanup_expired()
@@ -44,8 +47,10 @@ def upload_files():
     saved_paths = []
 
     for file in files:
+        if file.filename == '':
+            continue
         filename = secure_filename(file.filename)
-        save_path = os.path.join(UPLOAD_FOLDER, f"{code}_{filename}")
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{code}_{filename}")
         file.save(save_path)
         saved_paths.append(save_path)
 
@@ -55,8 +60,11 @@ def upload_files():
         'delete_after': delete_after_download
     }
 
+    print(f"[UPLOAD] Code generated: {code}")  # Debugging
+
     return jsonify({'code': code})
 
+# Retrieval Endpoint
 @app.route('/retrieve/<code>', methods=['GET'])
 def retrieve_file(code):
     cleanup_expired()
@@ -68,10 +76,9 @@ def retrieve_file(code):
     delete_after = file_records[code]['delete_after']
 
     if len(paths) == 1:
-        file_path = paths[0]
-        response = send_file(file_path, as_attachment=True)
+        response = send_file(paths[0], as_attachment=True)
     else:
-        zip_path = os.path.join(UPLOAD_FOLDER, f"{code}_bundle.zip")
+        zip_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{code}_bundle.zip")
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             for path in paths:
                 zipf.write(path, os.path.basename(path))
@@ -82,5 +89,6 @@ def retrieve_file(code):
 
     return response
 
+# Run
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
