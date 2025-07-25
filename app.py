@@ -6,20 +6,25 @@ import time
 import zipfile
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
+from datetime import datetime
 
 UPLOAD_FOLDER = 'uploads'
 EXPIRY_SECONDS = 86400  # 24 hours
 
 app = Flask(__name__)
-CORS(app)  # ✅ Enable CORS
-
+CORS(app)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 file_records = {}
+admin_secret = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+print(f"[ADMIN ACCESS CODE]: {admin_secret}")  # Only printed on server start
 
 def generate_code(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+def timestamp():
+    return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
 
 def cleanup_expired():
     now = time.time()
@@ -57,6 +62,9 @@ def upload_files():
     file_records[code] = {
         'paths': saved_paths,
         'timestamp': time.time(),
+        'created_at': timestamp(),
+        'expires_at': timestamp_from_now(EXPIRY_SECONDS),
+        'downloads': [],
         'delete_after': delete_after_download
     }
 
@@ -65,12 +73,14 @@ def upload_files():
 @app.route('/retrieve/<code>', methods=['GET'])
 def retrieve_file(code):
     cleanup_expired()
-
     if code not in file_records:
         abort(404)
 
-    paths = file_records[code]['paths']
-    delete_after = file_records[code]['delete_after']
+    record = file_records[code]
+    paths = record['paths']
+    delete_after = record['delete_after']
+
+    record['downloads'].append(timestamp())
 
     if len(paths) == 1:
         original_filename = os.path.basename(paths[0]).replace(f"{code}_", "")
@@ -86,6 +96,27 @@ def retrieve_file(code):
         delete_files(code)
 
     return response
+
+@app.route('/log/<code>')
+def get_log(code):
+    admin_token = request.args.get('admin')
+    if admin_token != admin_secret:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    if code not in file_records:
+        return jsonify({'error': 'Code not found'}), 404
+
+    record = file_records[code]
+    return jsonify({
+        'code': code,
+        'created_at': record['created_at'],
+        'expires_at': record['expires_at'],
+        'downloads': record['downloads'],
+        'delete_after_download': record['delete_after']
+    })
+
+def timestamp_from_now(seconds):
+    return datetime.utcfromtimestamp(time.time() + seconds).strftime('%Y-%m-%d %H:%M:%S UTC')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
