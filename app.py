@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, abort, Response
+from flask import Flask, request, jsonify, send_file, abort
 import os
 import random
 import string
@@ -74,23 +74,23 @@ def upload_files():
     return jsonify({'code': code})
 
 @app.route('/retrieve/<code>', methods=['GET'])
-def retrieve_or_log(code):
+def retrieve_or_logs(code):
     cleanup_expired()
 
-    if request.args.get('admin') == admin_secret:
-        if code not in file_records:
-            return Response("Code not found", status=404, mimetype='text/plain')
-        record = file_records[code]
-        log_text = f"""Log for Code: {code}
-Created: {record['created_at']}
-Expires: {record['expires_at']}
-Delete After Download: {record['delete_after']}
-Downloads:
-"""
-        for d in record['downloads']:
-            log_text += f"- {d}\n"
-        return Response(log_text, mimetype='text/plain')
+    # If admin code, return all logs
+    if code == admin_secret:
+        logs = []
+        for k, v in file_records.items():
+            logs.append({
+                'code': k,
+                'created_at': v['created_at'],
+                'expires_at': v['expires_at'],
+                'downloads': v['downloads'],
+                'delete_after_download': v['delete_after']
+            })
+        return jsonify(logs)
 
+    # Normal user retrieve
     if code not in file_records:
         abort(404)
 
@@ -100,8 +100,8 @@ Downloads:
     record['downloads'].append(timestamp())
 
     if len(paths) == 1:
-        original_filename = os.path.basename(paths[0]).replace(f"{code}_", "")
-        response = send_file(paths[0], as_attachment=True, download_name=original_filename)
+        filename = os.path.basename(paths[0]).replace(f"{code}_", "")
+        response = send_file(paths[0], as_attachment=True, download_name=filename)
     else:
         zip_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{code}_bundle.zip")
         with zipfile.ZipFile(zip_path, 'w') as zipf:
