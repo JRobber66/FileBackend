@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, abort
+from flask import Flask, request, jsonify, send_file, abort, Response
 import os
 import random
 import string
@@ -74,8 +74,23 @@ def upload_files():
     return jsonify({'code': code})
 
 @app.route('/retrieve/<code>', methods=['GET'])
-def retrieve_file(code):
+def retrieve_or_log(code):
     cleanup_expired()
+
+    if request.args.get('admin') == admin_secret:
+        if code not in file_records:
+            return Response("Code not found", status=404, mimetype='text/plain')
+        record = file_records[code]
+        log_text = f"""Log for Code: {code}
+Created: {record['created_at']}
+Expires: {record['expires_at']}
+Delete After Download: {record['delete_after']}
+Downloads:
+"""
+        for d in record['downloads']:
+            log_text += f"- {d}\n"
+        return Response(log_text, mimetype='text/plain')
+
     if code not in file_records:
         abort(404)
 
@@ -98,32 +113,6 @@ def retrieve_file(code):
         delete_files(code)
 
     return response
-
-@app.route('/log/<code>', methods=['GET'])
-def get_log_txt(code):
-    admin_token = request.args.get('admin')
-    if admin_token != admin_secret:
-        return "Unauthorized", 403
-
-    if code not in file_records:
-        return "Code not found", 404
-
-    record = file_records[code]
-    lines = [
-        f"File Code: {code}",
-        f"Created At: {record['created_at']}",
-        f"Expires At: {record['expires_at']}",
-        f"Delete After Download: {record['delete_after']}",
-        "Download Timestamps:"
-    ] + [f"  - {t}" for t in record['downloads']]
-
-    log_text = "\n".join(lines)
-    log_filename = f"log_{code}.txt"
-
-    with open(log_filename, "w") as f:
-        f.write(log_text)
-
-    return send_file(log_filename, as_attachment=True, download_name=log_filename)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
