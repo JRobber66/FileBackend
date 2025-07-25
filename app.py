@@ -100,23 +100,30 @@ def retrieve_file(code):
     return response
 
 @app.route('/log/<code>', methods=['GET'])
-def get_log(code):
+def get_log_txt(code):
     admin_token = request.args.get('admin')
     if admin_token != admin_secret:
-        return jsonify({'error': 'Unauthorized'}), 403
+        return "Unauthorized", 403
 
     if code not in file_records:
-        return jsonify({'error': 'Code not found'}), 404
+        return "Code not found", 404
 
     record = file_records[code]
-    return jsonify({
-        'code': code,
-        'created_at': record['created_at'],
-        'expires_at': record['expires_at'],
-        'downloads': record['downloads'],
-        'delete_after_download': record['delete_after']
-    })
+    lines = [
+        f"File Code: {code}",
+        f"Created At: {record['created_at']}",
+        f"Expires At: {record['expires_at']}",
+        f"Delete After Download: {record['delete_after']}",
+        "Download Timestamps:"
+    ] + [f"  - {t}" for t in record['downloads']]
+
+    log_text = "\n".join(lines)
+    log_filename = f"log_{code}.txt"
+
+    with open(log_filename, "w") as f:
+        f.write(log_text)
+
+    return send_file(log_filename, as_attachment=True, download_name=log_filename)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
-
