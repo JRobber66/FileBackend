@@ -26,6 +26,9 @@ def generate_code(length=8):
 def timestamp():
     return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
 
+def timestamp_from_now(seconds):
+    return datetime.utcfromtimestamp(time.time() + seconds).strftime('%Y-%m-%d %H:%M:%S UTC')
+
 def cleanup_expired():
     now = time.time()
     expired = [code for code, record in file_records.items() if now - record['timestamp'] > EXPIRY_SECONDS]
@@ -79,7 +82,6 @@ def retrieve_file(code):
     record = file_records[code]
     paths = record['paths']
     delete_after = record['delete_after']
-
     record['downloads'].append(timestamp())
 
     if len(paths) == 1:
@@ -97,7 +99,7 @@ def retrieve_file(code):
 
     return response
 
-@app.route('/log/<code>')
+@app.route('/log/<code>', methods=['GET'])
 def get_log(code):
     admin_token = request.args.get('admin')
     if admin_token != admin_secret:
@@ -115,8 +117,6 @@ def get_log(code):
         'delete_after_download': record['delete_after']
     })
 
-def timestamp_from_now(seconds):
-    return datetime.utcfromtimestamp(time.time() + seconds).strftime('%Y-%m-%d %H:%M:%S UTC')
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+
