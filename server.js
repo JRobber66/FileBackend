@@ -13,7 +13,7 @@ const JWT_SECRET = "supersecret";
 
 // Directories
 const TEMP_DIR = 'temp_chunks';
-const UPLOADS_DIR = 'uploads';
+const UPLOADS_DIR = '/app/uploads';
 
 // Ensure folders exist safely
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
