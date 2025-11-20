@@ -15,12 +15,20 @@ const JWT_SECRET = "supersecret";
 const TEMP_DIR = 'temp_chunks';
 const UPLOADS_DIR = 'uploads';
 
-// Ensure folders exist
+// Ensure folders exist safely
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// Multer setup
-const upload = multer({ dest: TEMP_DIR });
+// Multer safe DiskStorage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, TEMP_DIR); // don't try to create, just use
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname + '-' + Date.now());
+  }
+});
+const upload = multer({ storage });
 
 // Users file
 const USERS_FILE = 'users.json';
@@ -89,3 +97,4 @@ app.get('/download/:fileName', (req, res) => {
 // Start server
 const port = process.env.PORT || PORT;
 app.listen(port, () => console.log(`Backend running on port ${port}`));
+
