@@ -5,19 +5,29 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const upload = multer({ dest: 'temp_chunks/' });
 app.use(express.json());
 
 // Config
-const PORT = 3000;  // Railway will override this automatically if you bind to process.env.PORT
-const JWT_SECRET = "supersecret"; // Replace with your own secret
+const PORT = 3000;
+const JWT_SECRET = "supersecret";
 
-// Load or create users file
+// Directories
+const TEMP_DIR = 'temp_chunks';
+const UPLOADS_DIR = 'uploads';
+
+// Ensure folders exist
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Multer setup
+const upload = multer({ dest: TEMP_DIR });
+
+// Users file
 const USERS_FILE = 'users.json';
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify({}));
 let users = JSON.parse(fs.readFileSync(USERS_FILE));
 
-// Utility: save users.json
+// Save users utility
 function saveUsers() {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
@@ -42,18 +52,18 @@ app.post('/login', (req, res) => {
   res.send({ token });
 });
 
-// Upload endpoint
+// Upload endpoint (chunked)
 app.post('/upload', upload.single('chunk'), (req, res) => {
   const { fileName, chunkIndex, totalChunks } = req.body;
   const chunkPath = req.file.path;
-  const fileDir = path.join('uploads', fileName);
+  const fileDir = path.join(UPLOADS_DIR, fileName);
 
   if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
   fs.renameSync(chunkPath, path.join(fileDir, `chunk_${chunkIndex}`));
 
   const uploadedChunks = fs.readdirSync(fileDir);
   if (uploadedChunks.length == totalChunks) {
-    const finalPath = path.join('uploads', fileName);
+    const finalPath = path.join(UPLOADS_DIR, fileName);
     const writeStream = fs.createWriteStream(finalPath);
 
     for (let i = 0; i < totalChunks; i++) {
@@ -71,7 +81,7 @@ app.post('/upload', upload.single('chunk'), (req, res) => {
 
 // Download endpoint
 app.get('/download/:fileName', (req, res) => {
-  const filePath = path.join('uploads', req.params.fileName);
+  const filePath = path.join(UPLOADS_DIR, req.params.fileName);
   if (!fs.existsSync(filePath)) return res.status(404).send({ error: 'File not found' });
   res.download(filePath);
 });
